@@ -1,0 +1,9 @@
+{
+    "dependencies": [
+        {
+            "name": "qt5",
+            "default-features": false,
+            "features": [ "declarative", "imageformats" ]
+        }
+    ]
+}
