@@ -34,6 +34,8 @@ jobs:
       # Step 1: Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: '53.05-memory-layouts'
 
       # Step 2: Install build dependencies
       # Qt5 dependencies are required for this CMake/C++ project
