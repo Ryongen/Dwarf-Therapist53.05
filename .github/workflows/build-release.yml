@@ -25,6 +25,10 @@ jobs:
   build-and-release:
     name: Build and Release
     runs-on: ubuntu-latest
+    
+    # Explicitly set permissions for security
+    permissions:
+      contents: write  # Required for creating releases and uploading assets
 
     steps:
       # Step 1: Checkout the repository
