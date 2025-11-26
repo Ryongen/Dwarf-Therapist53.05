@@ -1,0 +1,114 @@
+# Build and Release workflow
+# This workflow builds the project in Release mode and creates a GitHub Release
+# with the compiled artifacts when a version tag (v*) is pushed.
+#
+# Triggers:
+# - Push of tags matching 'v*' (e.g., v1.0.0, v2.3.4)
+# - Manual workflow dispatch with optional tag input for testing
+
+name: Build and Release
+
+on:
+  # Trigger on version tags
+  push:
+    tags:
+      - 'v*'
+  # Allow manual runs for testing
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name for the release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    
+    # Explicitly set permissions for security
+    permissions:
+      contents: write  # Required for creating releases and uploading assets
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Install build dependencies
+      # Qt5 dependencies are required for this CMake/C++ project
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            build-essential \
+            qtbase5-dev \
+            qtdeclarative5-dev \
+            pkg-config
+
+      # Step 3: Configure CMake in Release mode
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      # Step 4: Build the project
+      - name: Build project
+        run: cmake --build build --config Release -- -j$(nproc)
+
+      # Step 5: Determine the tag name
+      # Use the pushed tag or the manual input
+      - name: Determine tag name
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "name=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      # Step 6: Create artifacts directory and archive build output
+      - name: Create release archive
+        run: |
+          mkdir -p artifacts
+          # Copy the built binary and shared data files
+          cp build/dwarftherapist artifacts/
+          cp -r share artifacts/
+          cp LICENSE.txt README.rst artifacts/
+          # Create compressed archive named with the tag
+          tar -czvf "dwarf-therapist-${{ steps.tag.outputs.name }}-linux.tar.gz" -C artifacts .
+
+      # Step 7: Upload build artifact for workflow artifact storage
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dwarf-therapist-${{ steps.tag.outputs.name }}-linux
+          path: dwarf-therapist-${{ steps.tag.outputs.name }}-linux.tar.gz
+          retention-days: 30
+
+      # Step 8: Create GitHub Release and upload assets
+      # Only creates a release when triggered by a tag push or manual dispatch
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.tag.outputs.name }}
+          name: Release ${{ steps.tag.outputs.name }}
+          body: |
+            ## Dwarf Therapist ${{ steps.tag.outputs.name }}
+            
+            This release contains the Linux build of Dwarf Therapist.
+            
+            ### Installation
+            1. Download the archive
+            2. Extract: `tar -xzvf dwarf-therapist-${{ steps.tag.outputs.name }}-linux.tar.gz`
+            3. Run: `./dwarftherapist`
+            
+            ### Note
+            You may need to configure ptrace permissions. See the README for details.
+          artifacts: dwarf-therapist-${{ steps.tag.outputs.name }}-linux.tar.gz
+          artifactContentType: application/gzip
+          # Allow updating the release if it already exists
+          allowUpdates: true
+          # Create release as draft for manual dispatch, published for tag push
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          # Skip if no tag is set (safety check)
+          skipIfReleaseExists: false
